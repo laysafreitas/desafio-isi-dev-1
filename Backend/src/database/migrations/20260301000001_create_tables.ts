@@ -88,8 +88,8 @@ export async function up(knex: Knex): Promise<void> {
     table.string('posicao_defensor', 3).notNullable();
     table.string('condicao_atacante', 20).notNullable();
     table.string('condicao_defensor', 20).notNullable();
-    table.string('atributo_ataque', 10).notNullable();
-    table.string('atributo_defesa', 10).notNullable();
+    table.string('atributo_ataque', 50).notNullable();
+    table.string('atributo_defesa', 50).notNullable();
     table.integer('valor_ataque').notNullable();
     table.integer('valor_defesa').notNullable();
     table.boolean('gol').notNullable();

@@ -6,9 +6,6 @@ import { useApp } from '../context/AppContext';
 import { fmtMoney } from '../lib/format';
 import { POSITION_LABEL } from '../lib/constants';
 
-/**
- * actions = { onView, onEdit, onCondition, onBuy, onSell, onDelete }  (cada uma recebe o jogador)
- */
 export function PlayerTable({ players, actions, empty }) {
   const { clubs } = useApp();
 

@@ -36,7 +36,7 @@ export function PlayersPage() {
   const [age, setAge] = useState({ min: '', max: '' });
   const [value, setValue] = useState({ min: '', max: '' });
   const [sort, setSort] = useState('name');
-  const [tab, setTab] = useState('all'); // all | free | clubs
+  const [tab, setTab] = useState('all'); 
   const [page, setPage] = useState(1);
 
   const [result, setResult] = useState(null);
@@ -44,10 +44,8 @@ export function PlayersPage() {
   const [loading, setLoading] = useState(true);
 
   const [drawerId, setDrawerId] = useState(null);
-  // { kind: 'create' | 'edit' | 'condition' | 'delete' | 'buy' | 'sell', player? }
   const [modal, setModal] = useState(null);
 
-  // Volta para a página 1 quando qualquer filtro muda
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, position, condition, clubId, age, value, sort, tab]);
@@ -82,7 +80,6 @@ export function PlayersPage() {
     load();
   }, [load, version]);
 
-  // Contadores das abas (sem filtros)
   useEffect(() => {
     Promise.all([
       api.listPlayers({ limit: 1 }),

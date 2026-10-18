@@ -15,11 +15,10 @@ const ATTRS = [
   { key: 'physical', label: 'Físico' },
 ];
 
-/** Se "player" for informado, o modal funciona em modo edição. */
 export function PlayerFormModal({ player, onClose, onSaved }) {
   const { refresh, notify } = useApp();
   const editing = !!player;
-  const locked = !!player?.club_id; // jogador com clube não muda de posição
+  const locked = !!player?.club_id; 
 
   const [name, setName] = useState(player?.name ?? '');
   const [position, setPosition] = useState(player?.position ?? 'MEI');

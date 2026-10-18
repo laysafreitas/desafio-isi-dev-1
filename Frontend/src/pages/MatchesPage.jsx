@@ -1,28 +1,66 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Swords } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { fmtDateTime } from '../lib/format';
-import { Modal } from '../components/Modal';
-
-const ATTR_LABEL = {
-  finalizacao: 'Finalização',
-  passe: 'Passe',
-  drible: 'Drible',
-  defesa: 'Defesa',
-};
+import { MatchTacticalPitch } from '../components/MatchTacticalPitch';
 
 export function MatchesPage() {
   const { clubs, version, refresh, notify } = useApp();
+  const navigate = useNavigate();
+
   const [matches, setMatches] = useState([]);
   const [home, setHome] = useState('');
   const [away, setAway] = useState('');
   const [busy, setBusy] = useState(false);
-  const [detail, setDetail] = useState(null);
+
+  // Estados da prévia de escalação antes do jogo
+  const [homeClubData, setHomeClubData] = useState(null);
+  const [awayClubData, setAwayClubData] = useState(null);
+  const [homeLineup, setHomeLineup] = useState(null);
+  const [awayLineup, setAwayLineup] = useState(null);
 
   useEffect(() => {
     api.listMatches().then(setMatches).catch((e) => notify('error', 'Falha ao listar partidas', e.message));
   }, [version, notify]);
+  useEffect(() => {
+    if (!home) {
+      setHomeClubData(null);
+      setHomeLineup(null);
+      return;
+    }
+    Promise.all([api.getClub(Number(home)), api.getLineup(Number(home))])
+      .then(([club, lineup]) => {
+        setHomeClubData(club);
+        setHomeLineup(lineup);
+      })
+      .catch(() => undefined);
+  }, [home]);
+
+  useEffect(() => {
+    if (!away) {
+      setAwayClubData(null);
+      setAwayLineup(null);
+      return;
+    }
+    Promise.all([api.getClub(Number(away)), api.getLineup(Number(away))])
+      .then(([club, lineup]) => {
+        setAwayClubData(club);
+        setAwayLineup(lineup);
+      })
+      .catch(() => undefined);
+  }, [away]);
+
+  const previewHomeStarters = useMemo(() => {
+    if (!homeClubData || !homeLineup?.player_ids) return [];
+    return homeClubData.players.filter((p) => homeLineup.player_ids.includes(p.id));
+  }, [homeClubData, homeLineup]);
+
+  const previewAwayStarters = useMemo(() => {
+    if (!awayClubData || !awayLineup?.player_ids) return [];
+    return awayClubData.players.filter((p) => awayLineup.player_ids.includes(p.id));
+  }, [awayClubData, awayLineup]);
 
   async function play() {
     if (!home || !away) return notify('error', 'Escolha os dois clubes');
@@ -30,21 +68,12 @@ export function MatchesPage() {
     setBusy(true);
     try {
       const m = await api.playMatch(Number(home), Number(away));
-      notify('success', 'Partida jogada', `${m.home.club_name} ${m.home.goals} × ${m.away.goals} ${m.away.club_name}`);
       await refresh();
-      setDetail(m);
+      navigate(`/partidas/${m.id}`);
     } catch (e) {
       notify('error', 'Não foi possível jogar', e.message);
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function open(id) {
-    try {
-      setDetail(await api.getMatch(id));
-    } catch (e) {
-      notify('error', 'Falha ao abrir a partida', e.message);
     }
   }
 
@@ -85,6 +114,18 @@ export function MatchesPage() {
             <Play size={16} /> {busy ? 'Jogando…' : 'Jogar partida'}
           </button>
         </div>
+
+        {homeClubData && awayClubData && home !== away && (
+          <div style={{ marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+            <h4 style={{ textAlign: 'center', marginBottom: '16px' }}>Prévia do Confronto</h4>
+            <MatchTacticalPitch
+              homeClub={homeClubData}
+              awayClub={awayClubData}
+              homeLineup={{ formation: homeLineup?.formation || '2-1-1', starters: previewHomeStarters }}
+              awayLineup={{ formation: awayLineup?.formation || '2-1-1', starters: previewAwayStarters }}
+            />
+          </div>
+        )}
       </section>
 
       <section className="card">
@@ -104,7 +145,7 @@ export function MatchesPage() {
                 <tr><td colSpan={5} className="empty">Nenhuma partida jogada ainda.</td></tr>
               )}
               {matches.map((m) => (
-                <tr key={m.id} className="clickable" onClick={() => open(m.id)}>
+                <tr key={m.id} className="clickable" onClick={() => navigate(`/partidas/${m.id}`)}>
                   <td className="muted">{fmtDateTime(m.played_at)}</td>
                   <td><strong>{m.home.club_name}</strong> <span className="muted">{m.home.formation}</span></td>
                   <td className="center score">{m.home.goals} × {m.away.goals}</td>
@@ -120,40 +161,6 @@ export function MatchesPage() {
           </table>
         </div>
       </section>
-
-      {detail && (
-        <Modal
-          title={`${detail.home.club_name} ${detail.home.goals} × ${detail.away.goals} ${detail.away.club_name}`}
-          description={`${fmtDateTime(detail.played_at)} · ${detail.home.formation} vs ${detail.away.formation}`}
-          onClose={() => setDetail(null)}
-          width={680}
-          footer={<button className="btn" onClick={() => setDetail(null)}>Fechar</button>}
-        >
-          <div className="duels">
-            {(detail.duels ?? []).map((d) => (
-              <div key={d.order} className={`duel ${d.goal ? 'goal' : ''}`}>
-                <span className="duel-n">{d.order}</span>
-                <div>
-                  <strong>{d.attacker.player_name}</strong>
-                  <small className="muted">
-                    {d.attacker.position} · {ATTR_LABEL[d.attacker.attribute] ?? d.attacker.attribute}
-                  </small>
-                </div>
-                <div className="duel-vals">
-                  <b>{d.attacker.value}</b> <span className="muted">×</span> <b>{d.defender.value}</b>
-                </div>
-                <div className="right">
-                  <strong>{d.defender.player_name}</strong>
-                  <small className="muted">
-                    {d.defender.position} · {ATTR_LABEL[d.defender.attribute] ?? d.defender.attribute}
-                  </small>
-                </div>
-                <span className={`badge ${d.goal ? 'ok' : 'bad'}`}>{d.goal ? 'Gol' : 'Defendeu'}</span>
-              </div>
-            ))}
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

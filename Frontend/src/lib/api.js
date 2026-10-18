@@ -45,7 +45,6 @@ const qs = (params) => {
 };
 
 export const api = {
-  // ---------- Jogadores ----------
   async listPlayers(q = {}) {
     const r = await request(`/players${qs(q)}`);
     return { data: r.data.map(normalizePlayer), meta: r.meta };
@@ -68,7 +67,7 @@ export const api = {
     return request(`/players/${id}`, { method: 'DELETE' });
   },
 
-  // ---------- Mercado ----------
+  
   buyPlayer(id, club_id, loyalty_until) {
     return request(`/players/${id}/buy`, {
       method: 'POST',
@@ -79,7 +78,6 @@ export const api = {
     return request(`/players/${id}/sell`, { method: 'POST', body: JSON.stringify({}) });
   },
 
-  // ---------- Clubes ----------
   listClubs(sort) {
     return request(`/clubs${qs({ sort })}`);
   },
@@ -94,7 +92,7 @@ export const api = {
     return request(`/clubs/${clubId}/transactions${qs({ type })}`);
   },
 
-  // ---------- Escalação ----------
+  
   async getLineup(clubId) {
     const r = await request(`/clubs/${clubId}/lineup`);
     return {
@@ -108,7 +106,6 @@ export const api = {
     return request(`/clubs/${clubId}/lineup`, { method: 'PUT', body: JSON.stringify({ formation, player_ids }) });
   },
 
-  // ---------- Partidas ----------
   listMatches(club_id) {
     return request(`/matches${qs({ club_id })}`);
   },

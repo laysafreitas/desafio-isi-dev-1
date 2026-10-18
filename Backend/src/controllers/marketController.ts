@@ -20,12 +20,12 @@ export const marketController = {
         return res.status(409).json({ message: 'O jogador precisa estar livre.' });
       }
 
-      const jaVendeu = await db('transacoes').where({ club_id, jenis: 'VENDA', jogador_id: playerId }).first();
+      const jaVendeu = await db('transacoes').where({ clube_id: club_id, tipo: 'VENDA', jogador_id: playerId }).first();
       if (jaVendeu) {
         return res.status(409).json({ message: 'O clube não pode recomprar um jogador que ele mesmo vendeu.' });
       }
 
-      const totalElenco = await db('jogadores').where({ club_id }).whereNull('excluido_em').count('* as total').first();
+      const totalElenco = await db('jogadores').where({ clube_id: club_id }).whereNull('excluido_em').count('* as total').first();
       if (Number(totalElenco?.total || 0) >= 12) {
         return res.status(409).json({ message: 'Elenco completo (máximo de 12 jogadores).' });
       }
@@ -47,10 +47,10 @@ export const marketController = {
 
       const resultado = await db.transaction(async (trx) => {
         await trx('clubes').where({ id: club_id }).update({ caixa: novoCaixa });
-        await trx('jogadores').where({ id: playerId }).update({ club_id });
+        await trx('jogadores').where({ id: playerId }).update({ clube_id: club_id });
 
         const [contratoId] = await trx('contratos').insert({
-          club_id,
+          clube_id: club_id,
           jogador_id: playerId,
           valor_compra: market_value,
           fidelidade_ate: loyalty_until,
@@ -58,7 +58,7 @@ export const marketController = {
         });
 
         const [transacaoId] = await trx('transacoes').insert({
-          club_id,
+          clube_id: club_id,
           jogador_id: playerId,
           nome_jogador: jogador.nome,
           tipo: 'COMPRA',
@@ -107,7 +107,7 @@ export const marketController = {
 
       const club_id = jogador.clube_id;
       const clube = await db('clubes').where({ id: club_id }).first();
-      const contrato = await db('contratos').where({ club_id, jogador_id: playerId, situacao: 'ATIVO' }).first();
+      const contrato = await db('contratos').where({ clube_id: club_id, jogador_id: playerId, situacao: 'ATIVO' }).first();
 
       const market_value = calcularValorMercado(Number(jogador.valor_base), jogador.condicao, jogador.agilidade, jogador.idade);
       const agora = new Date();
@@ -155,10 +155,10 @@ export const marketController = {
           await trx('contratos').where({ id: contrato.id }).update({ situacao: situacaoContrato, encerrado_em: agora });
         }
        
-        await trx('escalacoes').where({ club_id, jogador_id: playerId }).delete();
+        await trx('escalacoes').where({ clube_id: club_id, jogador_id: playerId }).delete();
 
         await trx('transacoes').insert({
-          club_id,
+          clube_id: club_id,
           jogador_id: playerId,
           nome_jogador: jogador.nome,
           tipo: 'VENDA',

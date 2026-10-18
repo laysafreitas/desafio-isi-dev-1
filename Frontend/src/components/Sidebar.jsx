@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { Clock, ListOrdered, Plus, Shield, Swords, Trophy, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -7,13 +7,15 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-logo">P</div>
-        <div>
-          <strong>Passe</strong>
-          <span className="muted">Gestão da liga</span>
+      <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <div className="brand" style={{ cursor: 'pointer' }}>
+          <div className="brand-logo">P</div>
+          <div>
+            <strong>Passe</strong>
+            <span className="muted">Gestão da liga</span>
+          </div>
         </div>
-      </div>
+      </Link>
 
       <nav>
         <div className="nav-section">Mercado</div>

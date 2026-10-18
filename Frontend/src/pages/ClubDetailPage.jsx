@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -12,6 +12,7 @@ import { SellModal } from '../components/SellModal';
 import { BuyModal } from '../components/BuyModal';
 import { DeleteModal } from '../components/DeleteModal';
 import { Avatar, ConditionBadge, PositionTag } from '../components/Badges';
+import { TacticalPitch } from '../components/TacticalPitch';
 
 const FORMATIONS = [
   { value: '3-1', label: '3-1', hint: '1 GOL · 3 ZAG/LAT · 1 ATA' },
@@ -24,9 +25,10 @@ export function ClubDetailPage() {
   const { id } = useParams();
   const clubId = Number(id);
   const { version, refresh, notify } = useApp();
+  const navigate = useNavigate();
 
   const [club, setClub] = useState(null);
-  const [tab, setTab] = useState('squad'); // squad | lineup | transactions
+  const [tab, setTab] = useState('squad'); 
   const [notFound, setNotFound] = useState(false);
 
   const [drawerId, setDrawerId] = useState(null);
@@ -160,13 +162,28 @@ function LineupTab({ club, onSaved }) {
       .getLineup(club.id)
       .then((l) => {
         setCurrent({ formation: l.formation, complete: l.complete });
-        setSelected(l.player_ids);
+        setSelected(l.player_ids || []);
         if (l.formation) setFormation(l.formation);
       })
       .catch(() => undefined);
   }, [club.id]);
 
   const eligible = useMemo(() => club.players.filter((p) => p.condition !== 'DOENTE'), [club.players]);
+
+  const malCondicionadosEscalados = useMemo(() => {
+    return club.players.filter(
+      (p) => selected.includes(p.id) && p.condition === 'MAL_CONDICIONADO'
+    );
+  }, [club.players, selected]);
+
+  const starters = useMemo(() => {
+    return club.players.filter((p) => selected.includes(p.id));
+  }, [club.players, selected]);
+
+  // Reservas elegíveis (não doentes e não escalados)
+  const reserves = useMemo(() => {
+    return club.players.filter((p) => !selected.includes(p.id) && p.condition !== 'DOENTE');
+  }, [club.players, selected]);
 
   const toggle = (pid) =>
     setSelected((s) => (s.includes(pid) ? s.filter((x) => x !== pid) : s.length >= 5 ? s : [...s, pid]));
@@ -185,6 +202,9 @@ function LineupTab({ club, onSaved }) {
       setBusy(false);
     }
   }
+
+  const nomes = malCondicionadosEscalados.map((p) => p.name).join(' e ');
+  const verbo = malCondicionadosEscalados.length > 1 ? 'estão' : 'está';
 
   return (
     <div className="lineup">
@@ -206,28 +226,50 @@ function LineupTab({ club, onSaved }) {
         </div>
       </div>
 
-      <div className="lineup-list">
-        {eligible.length === 0 && <p className="muted">Nenhum jogador disponível. Jogadores doentes não podem ser escalados.</p>}
-        {eligible.map((p) => {
-          const on = selected.includes(p.id);
-          return (
-            <button key={p.id} className={`lineup-row ${on ? 'on' : ''}`} onClick={() => toggle(p.id)} disabled={!on && selected.length >= 5}>
-              <input type="checkbox" readOnly checked={on} />
-              <Avatar player={p} size={32} />
-              <strong>{p.name}</strong>
-              <PositionTag position={p.position} />
-              <ConditionBadge condition={p.condition} />
-              <span className="muted">Overall {p.overall}</span>
-            </button>
-          );
-        })}
-      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '24px', alignItems: 'start', marginTop: '16px' }}>
+        <div>
+          <div className="lineup-list">
+            {eligible.length === 0 && <p className="muted">Nenhum jogador disponível. Jogadores doentes não podem ser escalados.</p>}
+            {eligible.map((p) => {
+              const on = selected.includes(p.id);
+              return (
+                <button key={p.id} className={`lineup-row ${on ? 'on' : ''}`} onClick={() => toggle(p.id)} disabled={!on && selected.length >= 5}>
+                  <input type="checkbox" readOnly checked={on} />
+                  <Avatar player={p} size={32} />
+                  <strong>{p.name}</strong>
+                  <PositionTag position={p.position} />
+                  <ConditionBadge condition={p.condition} />
+                  <span className="muted">Overall {p.overall}</span>
+                </button>
+              );
+            })}
+          </div>
 
-      {error && <p className="form-error">{error}</p>}
-      <div className="lineup-actions">
-        <button className="btn primary" disabled={busy || selected.length !== 5} onClick={save}>
-          {busy ? 'Salvando…' : 'Salvar escalação'}
-        </button>
+          {malCondicionadosEscalados.length > 0 && (
+            <div className="condition-warning-banner">
+              <span className="warning-icon">⚠️</span>
+              <div>
+                <strong>{nomes} {verbo} mal condicionado{malCondicionadosEscalados.length > 1 ? 's' : ''}.</strong>
+                <div>Podem jogar, mas cada atributo vale 15% a menos durante a partida.</div>
+              </div>
+            </div>
+          )}
+
+          {error && <p className="form-error">{error}</p>}
+          <div className="lineup-actions" style={{ marginTop: '16px' }}>
+            <button className="btn primary" disabled={busy || selected.length !== 5} onClick={save}>
+              {busy ? 'Salvando…' : 'Salvar escalação'}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <TacticalPitch
+            formation={formation}
+            starters={starters}
+            reserves={reserves}
+          />
+        </div>
       </div>
     </div>
   );

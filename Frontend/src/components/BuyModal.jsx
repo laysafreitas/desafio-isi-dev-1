@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, CheckCircle2 } from 'lucide-react';
 import { Modal } from './Modal';
 import { Avatar } from './Badges';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
-import { addDaysISO, fmtMoney } from '../lib/format';
+import { fmtMoney, fmtDateTime } from '../lib/format';
 import { POSITION_LABEL } from '../lib/constants';
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -12,11 +12,14 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 export function BuyModal({ player, onClose }) {
   const { clubs, refresh, notify } = useApp();
   const [clubId, setClubId] = useState(clubs[0] ? String(clubs[0].id) : '');
-  const [until, setUntil] = useState(addDaysISO(365));
+  // Define o valor padrão no formato AAAA-MM-DDTHH:mm (datetime-local)
+  const [loyaltyDateTime, setLoyaltyDateTime] = useState('2027-11-12T15:00');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [receipt, setReceipt] = useState(null); 
 
   const club = clubs.find((c) => String(c.id) === clubId);
+
   const calc = useMemo(() => {
     const fee = player.market_value > 30 ? round2(player.market_value * 0.05) : 0;
     const total = round2(player.market_value + fee);
@@ -26,17 +29,33 @@ export function BuyModal({ player, onClose }) {
 
   async function submit() {
     if (!club) return setError('Escolha um clube.');
-    if (!until) return setError('Informe até quando vale a fidelidade.');
-    if (new Date(until).getTime() <= Date.now()) return setError('A data de fidelidade deve ser futura.');
+    if (!loyaltyDateTime) return setError('Informe a data e horário de fidelidade.');
+    
+    const selectedTime = new Date(loyaltyDateTime).getTime();
+    if (isNaN(selectedTime) || selectedTime <= Date.now()) {
+      return setError('A data de fidelidade deve ser futura.');
+    }
+
     setBusy(true);
     setError('');
+
     try {
-      // Fim do dia no horário de Brasília, enviado como "AAAA-MM-DD HH:MM:SS" (UTC)
-      const loyalty = new Date(`${until}T23:59:59-03:00`).toISOString().slice(0, 19).replace('T', ' ');
-      const r = await api.buyPlayer(player.id, club.id, loyalty);
-      notify('success', 'Contratação concluída', `${r.player_name} agora é do ${club.name}. Caixa: ${fmtMoney(r.club_cash)}.`);
+      const loyalty = new Date(loyaltyDateTime).toISOString().slice(0, 19).replace('T', ' ');
+      
+      const res = await api.buyPlayer(player.id, club.id, loyalty);
+      
+      setReceipt({
+        playerName: player.name,
+        clubName: club.name,
+        value: player.market_value,
+        fee: calc.fee,
+        totalCost: calc.total,
+        newCash: res.club_cash ?? (club.cash - calc.total),
+        loyaltyUntil: loyaltyDateTime,
+      });
+
+      notify('success', 'Contratação concluída', `${player.name} agora é do ${club.name}.`);
       await refresh();
-      onClose();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -44,17 +63,64 @@ export function BuyModal({ player, onClose }) {
     }
   }
 
+  if (receipt) {
+    return (
+      <Modal
+        title=""
+        onClose={onClose}
+        footer={
+          <button className="btn primary full-width" onClick={onClose}>
+            Fechar
+          </button>
+        }
+      >
+        <div className="receipt-container" style={{ textAlign: 'center', padding: '8px 0' }}>
+          <div style={{ color: '#16a34a', display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+            <CheckCircle2 size={48} />
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 4px 0' }}>Compra concluída</h2>
+          <p className="muted" style={{ fontSize: '14px', marginBottom: '20px' }}>
+            {receipt.playerName} agora é do <strong>{receipt.clubName}</strong>.
+          </p>
+
+          <dl className="summary" style={{ textAlign: 'left', background: '#f9fafb', padding: '16px', borderRadius: '12px' }}>
+            <div>
+              <dt>Valor</dt>
+              <dd>{fmtMoney(receipt.value)}</dd>
+            </div>
+            <div>
+              <dt>Taxa</dt>
+              <dd>{fmtMoney(receipt.fee)}</dd>
+            </div>
+            <div className="total" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
+              <dt>Custo total</dt>
+              <dd>{fmtMoney(receipt.totalCost)}</dd>
+            </div>
+            <div>
+              <dt>Fim da fidelidade</dt>
+              <dd>{fmtDateTime(receipt.loyaltyUntil)}</dd>
+            </div>
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
+              <dt style={{ color: '#2563eb', fontWeight: 'bold' }}>Novo caixa do {receipt.clubName}</dt>
+              <dd style={{ color: '#2563eb', fontWeight: 'bold' }}>{fmtMoney(receipt.newCash)}</dd>
+            </div>
+          </dl>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       title="Comprar jogador"
-      description="O custo total (valor de mercado + taxa) não pode passar de 50% do caixa do clube."
+      description="Escolha o clube comprador e até quando vai a fidelidade do contrato."
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn primary" disabled={busy || !club} onClick={submit}>
+          <button className="btn primary" disabled={busy || !club || !calc.ok} onClick={submit}>
             <ShoppingCart size={16} /> {busy ? 'Comprando…' : 'Confirmar compra'}
           </button>
         </>
@@ -72,7 +138,7 @@ export function BuyModal({ player, onClose }) {
       </div>
 
       <label className="field">
-        <span>Clube</span>
+        <span>Clube comprador</span>
         <select value={clubId} onChange={(e) => setClubId(e.target.value)}>
           {clubs.map((c) => (
             <option key={c.id} value={c.id}>
@@ -80,11 +146,17 @@ export function BuyModal({ player, onClose }) {
             </option>
           ))}
         </select>
+        <small className="muted">Caixa atual: {fmtMoney(club?.cash || 0)}. Custo até 50% do caixa.</small>
       </label>
+
       <label className="field">
-        <span>Fidelidade até</span>
-        <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
-        <small className="muted">Vender antes dessa data gera multa rescisória.</small>
+        <span>Fim da fidelidade</span>
+        <input
+          type="datetime-local"
+          value={loyaltyDateTime}
+          onChange={(e) => setLoyaltyDateTime(e.target.value)}
+        />
+        <small className="muted">Depois do momento da compra e até 1.095 dias. Horário de Brasília (-03:00).</small>
       </label>
 
       <dl className="summary">
@@ -93,19 +165,18 @@ export function BuyModal({ player, onClose }) {
           <dd>{fmtMoney(player.market_value)}</dd>
         </div>
         <div>
-          <dt>Taxa (5% acima de 30,00)</dt>
+          <dt>Taxa (5% se acima de 30,00)</dt>
           <dd>{fmtMoney(calc.fee)}</dd>
         </div>
         <div className="total">
           <dt>Custo total</dt>
           <dd>{fmtMoney(calc.total)}</dd>
         </div>
-        <div>
-          <dt>Limite (50% do caixa)</dt>
-          <dd className={calc.ok ? '' : 'neg'}>{fmtMoney(calc.limit)}</dd>
-        </div>
       </dl>
-      {club && !calc.ok && <p className="form-error">O custo total excede 50% do caixa do clube.</p>}
+
+      {club && !calc.ok && (
+        <p className="form-error">O custo total ({fmtMoney(calc.total)}) excede 50% do caixa do clube ({fmtMoney(calc.limit)}).</p>
+      )}
       {error && <p className="form-error">{error}</p>}
     </Modal>
   );
