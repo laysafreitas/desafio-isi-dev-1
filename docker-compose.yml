@@ -33,7 +33,7 @@ services:
     depends_on:
       - db
     command: >
-      sh -c "npx knex migrate:latest && npx tsx watch src/server.ts"
+      sh -c "sh -c "npm run migrate && npm run dev""
     volumes:
       - ./backend:/app
       - /app/node_modules
