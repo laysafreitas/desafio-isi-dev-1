@@ -20,6 +20,7 @@ O banco de dados é executado em container Docker (MySQL 8.0) e gerenciado via m
 cd backend
 npx knex migrate:rollback --all
 npx knex migrate:latest
+npm run dev
 ``` 
 
 ## 3. Passo a Passo para Execução (Ubuntu 24.04 / Docker)
